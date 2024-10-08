@@ -20,7 +20,7 @@ export ROCBLASLT_LOG_LEVEL=32
 export HIPBLASLT_LAYER=6
 export HIPBLASLT_LOG_MASK=32
 export TENSILE_DB=0x40
-export HIPBLASLT_LOG_FILE=hipblaslt_bgrad.log
+export HIPBLASLT_LOG_FILE=hipblaslt_fp8.log
 
 python apex/contrib/test/fused_dense/test_fused_dense_1.py
 
