@@ -121,6 +121,47 @@ hipDataType get_dtype(at::Tensor A)
 }
 
 #ifdef HIPBLASLT
+//Hardcoding these values as float8 dtypes are not exposed in C++ by pytorch
+//So, there's not an easy way to calculate them
+const float E4M3_MAX_POS = 240.0;
+const float E5M2_MAX_POS = 57344.0;
+const float EPS = 1e-12;
+
+at::Tensor tensor_to_scale(at::Tensor x,  c10::ScalarType dtype, int dim = -1) {
+    at::Tensor amax;
+    if (dim == -1) {
+        amax = torch::max(torch::abs(x));
+    } else {
+        amax = std::get<0>(torch::max(torch::abs(x), dim, true));
+    }
+
+    auto scale = torch::empty_like(amax, x.dtype());
+    at::Tensor result ; 
+    if (dtype == c10::ScalarType::Float8_e4m3fnuz) {
+        result = E4M3_MAX_POS / torch::clamp(amax, EPS);
+    } else if (dtype == c10::ScalarType::Float8_e5m2fnuz) {
+        result = E5M2_MAX_POS / torch::clamp(amax, EPS);
+    } else {
+        fprintf(stderr, "Wrong data type to calculate tensor scale at %s:%d\n",
+                __FILE__,  __LINE__);
+        exit(EXIT_FAILURE);
+    }
+    scale.copy_(result);
+    return scale;
+}
+
+at::Tensor to_fp8_saturated(at::Tensor x,  c10::ScalarType dtype){
+    if (dtype == c10::ScalarType::Float8_e4m3fnuz) {
+        x = torch::clamp(x, -E4M3_MAX_POS, E4M3_MAX_POS);
+    } else if (dtype == c10::ScalarType::Float8_e5m2fnuz) {
+        x = torch::clamp(x, -E5M2_MAX_POS, E5M2_MAX_POS);
+    } else {
+        fprintf(stderr, "Wrong data type in to_fp8_saturated at %s:%d\n",
+                __FILE__,  __LINE__);
+        exit(EXIT_FAILURE);
+    }
+    return x.to(dtype);
+}
 
 /********************************************************************************************************************************************************
  *
@@ -218,6 +259,9 @@ int gemm_lt(
 
   CHECK_HIPBLASLT_ERROR(hipblasLtMatmulDescSetAttribute(matmulDesc, HIPBLASLT_MATMUL_DESC_TRANSB, 
                                                         &trans_b, sizeof(trans_b)));
+  if (A.scalar_type() == at::ScalarType::Float8_e4m3fnuz || A.scalar_type() == at::ScalarType::Float8_e5m2fnuz) {
+
+  }
 
   /* ============================================================================================
    *   Configure epilogue
@@ -391,6 +435,7 @@ at::Tensor linear_bias_forward(at::Tensor input, at::Tensor weight, at::Tensor b
 
   at::Tensor dummy_gelu = at::empty({0}, torch::device(torch::kCUDA).dtype(input.scalar_type()));
 
+  std::cout << "linear_bias_forward input dtype=" << input.scalar_type() << " weight dtype=" << weight.scalar_type() << " bias dtype=" << bias.scalar_type() << std::endl;
   // ********************************************************************************** 
   // output[batch_size, out_features] = input[batch_size, in_features] * weight[out_features,in_features] + bias[out_features]
   // **********************************************************************************

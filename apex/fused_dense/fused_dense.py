@@ -2,10 +2,13 @@ import torch
 from torch import nn
 import fused_dense_cuda
 from .. import amp
+from .. import fp8_utils
+
 #implements fused GEMM+bias in forward pass using mlp_cuda from apex
 class FusedDenseFunc(torch.autograd.Function):
     @staticmethod
     def forward(ctx, input, weight, bias):
+        print("PG FusedDenseFunc is called")
         ctx.save_for_backward(input, weight)
         output = fused_dense_cuda.linear_bias_forward(input, weight, bias.t())
         return output
@@ -63,26 +66,34 @@ class FusedDense(nn.Module):
         super(FusedDense, self).__init__()
         self.in_features = in_features
         self.out_features = out_features
-        self.weight = nn.Parameter(torch.randn(out_features, in_features))
+        self.weight = nn.Parameter(torch.empty(out_features, in_features))
         if bias:
-            self.bias = nn.Parameter(torch.randn(out_features))
+            self.bias = nn.Parameter(torch.empty(out_features))
         else:
             #assert False, "no-bias option not added yet"
             self.register_parameter('bias', None)
 
     def forward(self, input):
+        input_dtype = input.dtype
+#         if input_dtype ==  torch.float8_e4m3fnuz or input_dtype == torch.float8_e5m2fnuz:
+#             self.input_scale  =  1.0
+#             self.weight_scale = fp8_utils.tensor_to_scale(self.weight, input_dtype).float()
+#
+#             weight_fp8  = fp8_utils.to_fp8_saturated(self.weight * self.weight_scale, input_dtype)
+#             self.weight = nn.Parameter(weight_fp8)
+
         if self.bias is not None:
             return fused_dense_function(input, self.weight, self.bias)
         else:
             return dense_no_bias_function(input, self.weight)
-#======================================================================================= 
-# 
-#======================================================================================= 
+#=======================================================================================
+#
+#=======================================================================================
 class FusedDenseGeluDense(nn.Module):
     '''
     https://zeta.apac.ai/en/latest/zeta/nn/modules/fused_gelu_dense/
     module combines dense layers with GELU activations in a single neural network layer.
-    layer consists of two dense sub-layers, each followed by a GELU activation function. 
+    layer consists of two dense sub-layers, each followed by a GELU activation function.
     It takes an input tensor and passes it through these sub-layers to produce the final output.
     Parameters:
         dim (int): Input dimension.

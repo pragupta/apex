@@ -3,16 +3,16 @@
 
 
 # export HIPBLASLT_LOG_LEVEL=5
-export HIPBLASLT_LOG_MASK=32
-export TENSILE_DB=0x8000
-export HIPBLASLT_LOG_FILE=hipblaslt_float16.log
-
-
-sample_hipblaslt_gemm_ext_bgradb
-
+# export HIPBLASLT_LOG_MASK=32
+# export TENSILE_DB=0x8000
+# export HIPBLASLT_LOG_FILE=hipblaslt_float16.log
+#
+#
+# sample_hipblaslt_gemm_ext_bgradb
+#
 # python apex/contrib/test/fused_dense/test_fused_dense_1.py
-
-exit 0
+#
+# exit 0
 
 
 export HIPBLASLT_LOG_LEVEL=4
